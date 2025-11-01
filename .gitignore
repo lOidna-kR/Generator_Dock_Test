@@ -1,0 +1,146 @@
+# ==================== 환경 변수 ====================
+.env
+.env.local
+.env.*.local
+*.env
+
+# ==================== Python ====================
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# C extensions
+*.so
+
+# Distribution / packaging
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+pip-wheel-metadata/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# PyInstaller
+*.manifest
+*.spec
+
+# Unit test / coverage
+htmlcov/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+.hypothesis/
+.pytest_cache/
+
+# Virtual environments
+venv/
+ENV/
+env/
+.venv
+
+# ==================== IDE ====================
+# VS Code
+.vscode/
+*.code-workspace
+
+# PyCharm
+.idea/
+*.iml
+
+# Cursor
+.cursor/
+
+# Vim
+*.swp
+*.swo
+*~
+
+# Emacs
+*~
+\#*\#
+.\#*
+
+# ==================== 민감 파일 ====================
+# 설정 파일
+config_local.py
+*_secret.py
+secrets.py
+private_*.py
+
+# 인증 파일
+credentials.json
+service-account-key.json
+*.pem
+*.key
+*.crt
+
+# API 키
+api_keys.txt
+*.apikey
+
+# ==================== 로그 ====================
+*.log
+logs/
+Logs/
+*.log.*
+
+# ==================== OS ====================
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# Linux
+*~
+.directory
+.Trash-*
+
+# ==================== 프로젝트 특화 ====================
+# 임시 파일
+temp/
+tmp/
+*.tmp
+
+# 데이터 파일 (큰 파일)
+data/
+*.csv
+*.parquet
+
+# 모델 파일
+models/
+*.pkl
+*.joblib
+
+# 출력 파일
+output/
+results/
+
+# 테스트 결과
+test_output/
+

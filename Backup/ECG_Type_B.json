@@ -1,0 +1,146 @@
+[
+  {
+    "meta_form": "image",
+    "flags": {"has_image": true, "has_view": false, "has_lead": false, "has_numbers": false, "is_pediatric": false},
+    "question": "성인 심정지 환자의 초기 심전도는 다음과 같다. 적절한 다음 처치는?\n\n[Image: \"불규칙하고 미세한 파형\" - \"심실세동\"]",
+    "options": [
+      "즉시 제세동을 시행한다.",
+      "아미오다론 150mg을 우선 투여한다.",
+      "에피네프린 1mg을 즉시 투여한다.",
+      "가역적 원인을 먼저 감별한다."
+    ],
+    "answer_index": 1,
+    "explanation": [
+      "정답: 심실세동(VF)은 충격필요리듬으로 즉시 제세동이 우선이다.",
+      "오답: 아미오다론은 제세동/에피네프린 이후 단계에서 고려(초회 300mg).",
+      "오답: 에피네프린은 3–5분 간격으로 투여하되 제세동보다 우선하지 않는다.",
+      "오답: 가역적 원인 교정은 병행 사항이지 제세동보다 우선되지 않는다."
+    ]
+  },
+  {
+    "meta_form": "case",
+    "flags": {"has_image": true, "has_view": true, "has_lead": false, "has_numbers": true, "is_pediatric": false},
+    "question": "60대 남성이 호흡곤란과 흉통을 호소한다. 혈압 80/50mmHg, 맥박 120회/분, SpO2 90%. 다음 처치로 가장 적절한 것은?\n\n<보기>\n[Image: \"조직적 전기활동, 맥박 촉지 안 됨\" - \"무맥성 전기활동(PEA)\"]",
+    "options": [
+      "아스피린 투여",
+      "니트로글리세린 설하 투여",
+      "정맥로 확보 후 수액 및 산소 공급",
+      "관찰만 시행"
+    ],
+    "answer_index": 3,
+    "explanation": [
+      "오답: 항혈소판제는 PEA 처치의 우선순위가 아니다.",
+      "오답: 저혈압 상태에서 니트로글리세린은 금기다.",
+      "정답: PEA/쇼크 소견에서 순환 보조(정맥로, 수액)와 산소 공급이 우선.",
+      "오답: 관찰만으로는 생존 가능성을 낮춘다."
+    ]
+  },
+  {
+    "meta_form": "case+view",
+    "flags": {"has_image": true, "has_view": true, "has_lead": true, "has_numbers": false, "is_pediatric": false},
+    "question": "환자는 두근거림을 호소한다. 다음 <보기>를 참고하여 적절한 처치를 고르시오.\n\n<보기>\nLead II 25 mm/sec\n[Image: \"규칙적이고 빠른 좁은 QRS\" - \"발작성 심실상성 빈맥\"]",
+    "options": [
+      "미주신경수기 시행",
+      "아미오다론 정주",
+      "리도카인 정주",
+      "즉시 비동기 제세동"
+    ],
+    "answer_index": 1,
+    "explanation": [
+      "정답: 안정적 PSVT 1차 처치는 미주신경수기.",
+      "오답: 아미오다론은 PSVT 1차 약제가 아니다(아데노신 우선).",
+      "오답: 리도카인은 주로 심실성 부정맥에 사용한다.",
+      "오답: 제세동은 VF/pVT 등 충격필요리듬에서 시행한다."
+    ]
+  },
+  {
+    "meta_form": "basic",
+    "flags": {"has_image": true, "has_view": false, "has_lead": false, "has_numbers": false, "is_pediatric": false},
+    "question": "무수축(asystole)에 대한 설명으로 옳은 것은?\n\n[Image: \"거의 평탄한 선\" - \"무수축(asystole)\"]",
+    "options": [
+      "충격필요리듬이다.",
+      "제세동을 우선 시행한다.",
+      "고품질 심폐소생술과 에피네프린 투여가 기본 치료이다.",
+      "아데노신을 투여한다."
+    ],
+    "answer_index": 3,
+    "explanation": [
+      "오답: 무수축은 충격불필요리듬이다.",
+      "오답: 제세동 적응증이 아니다.",
+      "정답: CPR과 에피네프린(1mg q3–5m)이 기본.",
+      "오답: 아데노신은 주로 안정적 PSVT 진단/치료에 사용."
+    ]
+  },
+  {
+    "meta_form": "algorithm",
+    "flags": {"has_image": true, "has_view": false, "has_lead": false, "has_numbers": false, "is_pediatric": false},
+    "question": "다음 리듬에서 초기 처치 순서로 옳은 것은?\n\n[Image: \"조직적 전기활동, 맥박 촉지 안 됨\" - \"무맥성 전기활동(PEA)\"]",
+    "options": [
+      "제세동 → 에피네프린",
+      "심폐소생술 → 에피네프린 → 가역적 원인 교정",
+      "아미오다론 → 제세동",
+      "관찰 후 2분 뒤 재평가"
+    ],
+    "answer_index": 2,
+    "explanation": [
+      "오답: PEA는 충격불필요리듬이므로 제세동 적응증이 아니다.",
+      "정답: CPR → 에피네프린 → 5H5T 교정이 표준.",
+      "오답: 아미오다론은 VF/pVT에 적합하다.",
+      "오답: 즉시 처치가 필요하며 단순 관찰은 부적절하다."
+    ]
+  },
+  {
+    "meta_form": "numeric",
+    "flags": {"has_image": true, "has_view": false, "has_lead": false, "has_numbers": true, "is_pediatric": false},
+    "question": "불응성 심실세동에서 아미오다론의 투여 용량으로 옳은 것은?\n\n[Image: \"불규칙하고 미세한 파형\" - \"심실세동\"]",
+    "options": [
+      "첫 용량 150mg, 추가 150mg",
+      "첫 용량 300mg, 추가 150mg",
+      "첫 용량 1mg, 3–5분 간격 반복",
+      "첫 용량 3mg/kg"
+    ],
+    "answer_index": 2,
+    "explanation": [
+      "오답: 초회 150mg이 아니라 300mg이 표준.",
+      "정답: 300mg 후 필요 시 150mg 추가.",
+      "오답: 1mg q3–5m은 에피네프린 용법.",
+      "오답: 성인 아미오다론 표준이 아니다."
+    ]
+  },
+  {
+    "meta_form": "pacing",
+    "flags": {"has_image": true, "has_view": true, "has_lead": false, "has_numbers": true, "is_pediatric": false},
+    "question": "경피 인공심박동조율 성공 판단과 출력 설정으로 옳은 것은?\n\n<보기>\n[Image: \"심박조율기 스파이크 뒤 QRS 포획\" - \"경피 인공심박동조율 포획 소견\"]",
+    "options": [
+      "pacing spike만 보이면 성공이다.",
+      "포획 확인 후 역치보다 약 10% 높은 출력으로 유지한다.",
+      "맥박 확인은 대퇴동맥만 사용한다.",
+      "시작부터 최대 출력으로 고정한다."
+    ],
+    "answer_index": 2,
+    "explanation": [
+      "오답: spike만으로 성공 판단 불가(포획+맥박 촉지 확인 필요).",
+      "정답: 역치 결정 후 10% 상향해 안정적으로 유지.",
+      "오답: 근육수축 오인을 줄이려면 목동맥 확인이 선호된다.",
+      "오답: 최소 출력에서 점진적 증량이 원칙이다."
+    ]
+  },
+  {
+    "meta_form": "pediatric",
+    "flags": {"has_image": true, "has_view": false, "has_lead": false, "has_numbers": true, "is_pediatric": true},
+    "question": "20kg 소아 VF에서 세 번째 제세동 에너지와 아미오다론 용량으로 옳은 것은?\n\n[Image: \"불규칙하고 빠른 리듬\" - \"심실세동\"]",
+    "options": [
+      "40J, 5mg/kg",
+      "80J, 5mg/kg",
+      "40J, 1mg/kg",
+      "80J, 1mg/kg"
+    ],
+    "answer_index": 2,
+    "explanation": [
+      "오답: 세 번째 제세동은 ≥4J/kg(20kg → ≥80J).",
+      "정답: 80J 이상, 아미오다론 5mg/kg.",
+      "오답: 아미오다론 용량이 틀림(5mg/kg).",
+      "오답: 에너지/용량 모두 부적절하다."
+    ]
+  }
+]
