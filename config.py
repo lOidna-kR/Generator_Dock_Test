@@ -125,8 +125,8 @@ def get_retriever_config() -> Dict[str, Any]:
         "index_id": os.getenv("VERTEX_AI_INDEX_ID"),
         "endpoint_id": os.getenv("VERTEX_AI_ENDPOINT_ID"),
         "gcs_bucket_name": os.getenv("GCS_BUCKET_NAME"),
-        "k": int(os.getenv("RETRIEVAL_K", "3")),  # 최종 반환할 문서 개수
-        "initial_k": int(os.getenv("RETRIEVAL_INITIAL_K", "10")),  # Reranking 전 초기 검색 개수
+        "k": int(os.getenv("RETRIEVAL_K", "7")),  # 최종 반환할 문서 개수 (리랭킹 후)
+        "initial_k": int(os.getenv("RETRIEVAL_INITIAL_K", "20")),  # Reranking 전 초기 검색 개수
         "search_type": os.getenv("SEARCH_TYPE", "similarity"),
         "similarity_threshold": float(os.getenv("SIMILARITY_THRESHOLD", "0.7")),
         "llm_temperature": float(os.getenv("LLM_TEMPERATURE", "0.7")),
@@ -338,7 +338,7 @@ def get_mcq_generation_config() -> Dict[str, Any]:
         "random_sample_max": int(os.getenv("MCQ_RANDOM_SAMPLE_MAX", "1000")),
         "few_shot_max_examples": int(os.getenv("MCQ_FEW_SHOT_MAX_EXAMPLES", "1")),  # 1개 예시 (명확한 형식 지시)
         "few_shot_folder_path": os.getenv("MCQ_FEW_SHOT_FOLDER_PATH", "Data/Few_Shot"),
-        "max_context_docs": int(os.getenv("MCQ_MAX_CONTEXT_DOCS", "3")),
+        "max_context_docs": int(os.getenv("MCQ_MAX_CONTEXT_DOCS", "7")),  # LLM에 전달할 최종 문서 개수
         
         # Part별 가중치 (전체 비율, 실제 메타데이터 형식 사용)
         # 주의: 메타데이터는 짧은 형식 ("총론", "법령", "각론")

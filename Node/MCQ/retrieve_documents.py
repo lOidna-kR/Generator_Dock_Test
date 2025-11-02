@@ -273,8 +273,14 @@ def create_mcq_retrieve_documents_node(
                     
                     section_ids = [build_section_id(doc) for doc in documents]
                     document_ids = [get_document_id(doc) for doc in documents]
-                    used_sections = set(state.get("used_section_ids", []))
-                    used_docs = set(state.get("used_document_ids", []))
+                    
+                    # 중복 방지: 최근 5개만 추적 (완화된 정책)
+                    used_sections_all = state.get("used_section_ids", [])
+                    used_docs_all = state.get("used_document_ids", [])
+                    
+                    # 최근 5개만 사용 (나머지는 재사용 허용)
+                    used_sections = set(used_sections_all[-5:]) if used_sections_all else set()
+                    used_docs = set(used_docs_all[-5:]) if used_docs_all else set()
 
                     if used_sections or used_docs:
                         filtered_triplets = [
@@ -283,27 +289,17 @@ def create_mcq_retrieve_documents_node(
                             if section_id not in used_sections and doc_id not in used_docs
                         ]
 
-                        if filtered_triplets:
+                        # 필터링 후 문서가 충분하면 사용, 부족하면 필터링 무시
+                        min_required = max(3, k // 2)  # 최소 3개 또는 k의 절반
+                        
+                        if len(filtered_triplets) >= min_required:
                             documents = [triplet[0] for triplet in filtered_triplets]
                             document_ids = [triplet[1] for triplet in filtered_triplets]
                             section_ids = [triplet[2] for triplet in filtered_triplets]
+                            logger.info(f"   중복 제거: {len(documents)}개 (최근 5개 제외)")
                         else:
-                            logger.warning("   사용된 섹션/문서로만 구성되어 재검색 필요")
-                            return error_handler.handle_error(
-                                error=ValueError("사용할 수 있는 새로운 섹션이 없습니다"),
-                                state=state,
-                                node_name="retrieve_documents",
-                                recoverable=True,
-                                return_fields={
-                                    "selected_part": selected_part,
-                                    "selected_chapter": selected_chapter,
-                                    "selected_topic_query": query,
-                                    "retrieved_documents": [],
-                                    "num_documents": 0,
-                                    "context_document_ids": [],
-                                    "context_section_ids": [],
-                                }
-                            )
+                            logger.info(f"   중복 제거 건너뜀 (필터링 후 {len(filtered_triplets)}개 < {min_required}개)")
+                            # 필터링하지 않고 원본 사용 (다양성보다 문서 수 우선)
 
                     # recent_document_ids 업데이트
                     return_fields = {
@@ -478,8 +474,14 @@ def create_mcq_retrieve_documents_node(
             
             section_ids = [build_section_id(doc) for doc in documents]
             document_ids = [get_document_id(doc) for doc in documents]
-            used_sections = set(state.get("used_section_ids", []))
-            used_docs = set(state.get("used_document_ids", []))
+            
+            # 중복 방지: 최근 5개만 추적 (완화된 정책)
+            used_sections_all = state.get("used_section_ids", [])
+            used_docs_all = state.get("used_document_ids", [])
+            
+            # 최근 5개만 사용 (나머지는 재사용 허용)
+            used_sections = set(used_sections_all[-5:]) if used_sections_all else set()
+            used_docs = set(used_docs_all[-5:]) if used_docs_all else set()
 
             if used_sections or used_docs:
                 filtered_triplets = [
@@ -488,27 +490,17 @@ def create_mcq_retrieve_documents_node(
                     if section_id not in used_sections and doc_id not in used_docs
                 ]
 
-                if filtered_triplets:
+                # 필터링 후 문서가 충분하면 사용, 부족하면 필터링 무시
+                min_required = max(3, k // 2)  # 최소 3개 또는 k의 절반
+                
+                if len(filtered_triplets) >= min_required:
                     documents = [triplet[0] for triplet in filtered_triplets]
                     document_ids = [triplet[1] for triplet in filtered_triplets]
                     section_ids = [triplet[2] for triplet in filtered_triplets]
+                    logger.info(f"   중복 제거: {len(documents)}개 (최근 5개 제외)")
                 else:
-                    logger.warning("   사용된 섹션/문서로만 구성되어 재검색 필요")
-                    return error_handler.handle_error(
-                        error=ValueError("사용할 수 있는 새로운 섹션이 없습니다"),
-                        state=state,
-                        node_name="retrieve_documents",
-                        recoverable=True,
-                        return_fields={
-                            "selected_part": selected_part,
-                            "selected_chapter": selected_chapter,
-                            "selected_topic_query": query,
-                            "retrieved_documents": [],
-                            "num_documents": 0,
-                            "context_document_ids": [],
-                            "context_section_ids": [],
-                        }
-                    )
+                    logger.info(f"   중복 제거 건너뜀 (필터링 후 {len(filtered_triplets)}개 < {min_required}개)")
+                    # 필터링하지 않고 원본 사용 (다양성보다 문서 수 우선)
 
             # 8-1. 검색된 문서 ID를 recent_document_ids에 추가 (순환 큐 방식, 최대 20개)
             return_fields = {
