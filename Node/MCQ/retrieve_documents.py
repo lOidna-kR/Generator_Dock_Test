@@ -264,12 +264,14 @@ def create_mcq_retrieve_documents_node(
                             logger.info(f"   최근 사용 문서 제외 후 {len(filtered_documents)}개만 남음, 전체 사용")
                             # 필터링 결과가 k개 미만이면 전체 문서 사용 (다양성보다 품질 우선)
                     
-                    # Reranking
+                    # 랜덤 샘플링 (다양성 극대화)
                     if len(documents) > k:
-                        logger.debug(f"Reranking 시작: {len(documents)}개 → {k}개")
-                        documents = rerank_documents(query, documents, top_k=k, logger=logger)
+                        import random
+                        original_count = len(documents)
+                        documents = random.sample(documents, k)
+                        logger.info(f"✅ 랜덤 선택: {original_count}개 → {k}개 (다양성 우선)")
                     else:
-                        logger.info(f"   Reranking 건너뜀 (문서 {len(documents)}개 ≤ {k}개)")
+                        logger.info(f"   랜덤 선택 건너뜀 (문서 {len(documents)}개 ≤ {k}개)")
                     
                     section_ids = [build_section_id(doc) for doc in documents]
                     document_ids = [get_document_id(doc) for doc in documents]
