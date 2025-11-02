@@ -54,7 +54,7 @@ def should_retry_after_validation(
 
 def should_retry_after_retrieve(
     state: State
-) -> Literal["format_context", "retry"]:
+) -> Literal["select_context", "retry"]:
     """
     문서 검색 후 재시도 여부 결정
     
@@ -71,11 +71,25 @@ def should_retry_after_retrieve(
     
     # 재시도 횟수 초과 시 강제로 진행
     if retry_count >= max_retries:
-        return "format_context"
+        return "select_context"
     
     if state.get("error") and state.get("should_retry"):
         return "retry"
     
+    return "select_context"
+
+
+def should_retry_after_context_selection(
+    state: State,
+) -> Literal["format_context", "retry_retrieve"]:
+    """컨텍스트 선택 이후 흐름 결정"""
+
+    retry_count = state.get("retry_count", 0)
+    max_retries = state.get("max_retries", 6)
+
+    if state.get("error") and state.get("should_retry") and retry_count < max_retries:
+        return "retry_retrieve"
+
     return "format_context"
 
 
@@ -84,14 +98,20 @@ def should_retry_after_retrieve(
 
 def build_mcq_workflow_edges(workflow: "StateGraph") -> None:
     """
-    MCQ 워크플로우의 모든 엣지를 구성합니다. (간소화 버전)
+    MCQ 워크플로우의 모든 엣지를 구성합니다. (범위별 프롬프트 지원)
     
     워크플로우 구조:
         START 
           ↓
-        retrieve_documents (문서 검색, 랜덤 주제)
+        retrieve_documents (문서 검색, Part/Chapter 결정)
+          ↓ [조건부]
+        select_prompt (범위별 프롬프트 동적 로드)
+          ↓
+        select_context_chunk (문서/섹션 선택)
           ↓ [조건부]
         format_context (컨텍스트 포맷팅)
+          ↓
+        prepare_generation_payload (LLM 페이로드 준비)
           ↓
         generate_mcq (MCQ 생성)
           ↓
@@ -111,6 +131,7 @@ def build_mcq_workflow_edges(workflow: "StateGraph") -> None:
     Example:
         workflow = StateGraph(MCQState)
         workflow.add_node("retrieve_documents", retrieve_func)
+        workflow.add_node("select_prompt", select_prompt_func)
         # ... 다른 노드들
         
         build_mcq_workflow_edges(workflow)  # 엣지 자동 구성
@@ -118,18 +139,31 @@ def build_mcq_workflow_edges(workflow: "StateGraph") -> None:
     # 1. 시작 엣지 - 바로 retrieve_documents로
     workflow.add_edge(START, "retrieve_documents")
     
-    # 2. 조건부 엣지: 문서 검색 후
+    # 2. 조건부 엣지: 문서 검색 후 → 프롬프트 선택 또는 재시도
     workflow.add_conditional_edges(
         "retrieve_documents",
         should_retry_after_retrieve,
         {
-            "format_context": "format_context",
+            "select_context": "select_prompt",  # 성공 시 프롬프트 선택으로
             "retry": "retrieve_documents",  # 실패 시 재시도
         }
     )
     
+    # 3. 프롬프트 선택 후 → 컨텍스트 선택 (무조건)
+    workflow.add_edge("select_prompt", "select_context_chunk")
+
+    workflow.add_conditional_edges(
+        "select_context_chunk",
+        should_retry_after_context_selection,
+        {
+            "format_context": "format_context",
+            "retry_retrieve": "retrieve_documents",
+        }
+    )
+    
     # 3. MCQ 생성 흐름 (선형)
-    workflow.add_edge("format_context", "generate_mcq")
+    workflow.add_edge("format_context", "prepare_generation_payload")
+    workflow.add_edge("prepare_generation_payload", "generate_mcq")
     workflow.add_edge("generate_mcq", "validate_mcq")
     
     # 4. 조건부 엣지: 유효성 검증 후
@@ -169,11 +203,21 @@ retrieve_documents (랜덤 주제 선택 및 문서 검색)
   - 랜덤 Chapter 선택
   - 선택된 주제로 벡터 검색
   ↓ [조건부]
+  - 성공 → select_context_chunk
+  - 실패 → retrieve_documents (재시도)
+  ↓
+select_context_chunk (중복 섹션 제거 및 우선순위 선정)
+  - 섹션 중복 제거
+  - 최대 N개 문서 선정
+  ↓ [조건부]
   - 성공 → format_context
   - 실패 → retrieve_documents (재시도)
   ↓
 format_context (컨텍스트 포맷팅)
   - 문서를 LLM용 형식으로 변환
+  ↓
+prepare_generation_payload (LLM 페이로드 구성)
+  - 지시문/카테고리/컨텍스트 통합
   ↓
 generate_mcq (MCQ 생성)
   - Few-shot 프롬프트 구성

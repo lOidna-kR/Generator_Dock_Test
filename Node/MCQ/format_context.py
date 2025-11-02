@@ -44,7 +44,7 @@ def create_mcq_format_context_node(logger: logging.Logger):
         try:
             logger.info("컨텍스트 포맷팅 시작")
             
-            documents = state["retrieved_documents"]
+            documents = state.get("selected_documents") or state.get("retrieved_documents")
             
             if not documents:
                 # 문서 없음 에러 (복구 가능)

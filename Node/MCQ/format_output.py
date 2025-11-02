@@ -5,6 +5,7 @@ MCQ 출력 포맷팅 노드
 """
 
 import logging
+import hashlib
 from datetime import datetime
 from typing import TYPE_CHECKING
 
@@ -71,12 +72,37 @@ def create_mcq_format_output_node(logger: logging.Logger):
                 mcq["doc_chapter"] = metadata.get("chapter", state["selected_chapter"])
                 mcq["doc_section"] = metadata.get("section", "N/A")
                 mcq["doc_page_number"] = metadata.get("page_number", "N/A")
+
+                section_ids = (
+                    state.get("selected_section_ids")
+                    or state.get("context_section_ids")
+                    or []
+                )
+                document_ids = (
+                    state.get("selected_document_ids")
+                    or state.get("context_document_ids")
+                    or []
+                )
             else:
                 mcq["doc_title"] = "N/A"
                 mcq["doc_part"] = state["selected_part"]
                 mcq["doc_chapter"] = state["selected_chapter"]
                 mcq["doc_section"] = "N/A"
                 mcq["doc_page_number"] = "N/A"
+
+                section_ids = []
+                document_ids = []
+
+            mcq["doc_section_ids"] = section_ids
+            mcq["doc_section_id"] = section_ids[0] if section_ids else None
+            mcq["doc_document_ids"] = document_ids
+            mcq["doc_document_id"] = document_ids[0] if document_ids else None
+
+            question_signature = "||".join([
+                mcq.get("question", "").strip(),
+                *[opt.strip() for opt in mcq.get("options", [])],
+            ])
+            mcq["question_hash"] = hashlib.sha256(question_signature.encode("utf-8")).hexdigest()
             
             # 성공 처리
             return error_handler.handle_success(

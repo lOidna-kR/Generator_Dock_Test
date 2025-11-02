@@ -450,6 +450,15 @@ def is_duplicate_mcq(new_mcq: dict, existing_mcqs: list, similarity_threshold: f
     new_question = new_mcq.get('question', '').strip().lower()
     new_options = new_mcq.get('options', [])
     new_chapter = new_mcq.get('selected_chapter', '')
+    new_section_ids = set(new_mcq.get('doc_section_ids', []) or [])
+    single_new_section = new_mcq.get('doc_section_id')
+    if single_new_section:
+        new_section_ids.add(single_new_section)
+    new_document_ids = set(new_mcq.get('doc_document_ids', []) or [])
+    single_new_document = new_mcq.get('doc_document_id')
+    if single_new_document:
+        new_document_ids.add(single_new_document)
+    new_question_hash = new_mcq.get('question_hash')
     
     # 질문 + 모든 보기를 결합한 텍스트 생성
     new_content = new_question + " " + " ".join([opt.strip().lower() for opt in new_options])
@@ -467,6 +476,25 @@ def is_duplicate_mcq(new_mcq: dict, existing_mcqs: list, similarity_threshold: f
     for existing_mcq in existing_mcqs:
         existing_question = existing_mcq.get('question', '').strip().lower()
         existing_options = existing_mcq.get('options', [])
+        existing_section_ids = set(existing_mcq.get('doc_section_ids', []) or [])
+        single_existing_section = existing_mcq.get('doc_section_id')
+        if single_existing_section:
+            existing_section_ids.add(single_existing_section)
+        existing_document_ids = set(existing_mcq.get('doc_document_ids', []) or [])
+        single_existing_document = existing_mcq.get('doc_document_id')
+        if single_existing_document:
+            existing_document_ids.add(single_existing_document)
+        existing_question_hash = existing_mcq.get('question_hash')
+
+        # 동일한 섹션이면 중복 처리
+        if new_section_ids and existing_section_ids and new_section_ids.intersection(existing_section_ids):
+            return True
+
+        if new_document_ids and existing_document_ids and new_document_ids.intersection(existing_document_ids):
+            return True
+
+        if new_question_hash and existing_question_hash and new_question_hash == existing_question_hash:
+            return True
         
         # 정확히 같은 질문이면 중복
         if new_question == existing_question:

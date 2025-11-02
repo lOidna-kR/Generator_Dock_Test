@@ -66,19 +66,23 @@ class MultipleChoiceQuestion(BaseModel):
 
 def create_mcq_generate_node(
     llm: "VertexAI",
-    prompt_templates: dict,
     logger: logging.Logger,
 ):
     """
     MCQ 생성 노드를 생성하는 팩토리 함수
     
+    프롬프트는 State에서 동적으로 로드됩니다 (select_prompt 노드에서 설정).
+    
     Args:
         llm: VertexAI LLM 객체
-        prompt_templates: 프롬프트 템플릿 딕셔너리
         logger: 로거 객체
     
     Returns:
         MCQ 생성 노드 함수
+    
+    Note:
+        이 노드는 select_prompt 노드 이후에 실행되어야 합니다.
+        State에 system_prompt와 retriever_prompt가 있어야 합니다.
     """
     # 에러 핸들러 생성
     error_handler = create_error_handler(logger)
@@ -104,15 +108,36 @@ def create_mcq_generate_node(
             # JSON 파서 생성
             parser = JsonOutputParser(pydantic_object=MultipleChoiceQuestion)
             
-            # 프롬프트 템플릿
-            system_template = prompt_templates["mcq_generation_system"]
-            human_template = prompt_templates["mcq_generation_human_retriever"]
+            payload = state.get("generation_payload", {})
+            formatted_context = payload.get("context") or state.get("formatted_context", "")
+            if not formatted_context:
+                raise ValueError("LLM에 전달할 컨텍스트가 없습니다")
+
+            selected_topic = payload.get("selected_topic") or state.get("selected_topic_query")
+            instruction = payload.get("instruction") or state.get("instruction", "")
+
+            # State에서 프롬프트 가져오기 (select_prompt 노드에서 설정됨)
+            system_template = state.get("system_prompt")
+            human_template = state.get("retriever_prompt")
+            
+            if not system_template or not human_template:
+                raise ValueError(
+                    "프롬프트가 State에 없습니다. "
+                    "select_prompt 노드가 먼저 실행되었는지 확인하세요."
+                )
+            
+            # 선택된 범위 로깅
+            selected_part = state.get("selected_part")
+            selected_chapter = state.get("selected_chapter")
+            logger.info(
+                f"프롬프트 사용: Part={selected_part}, Chapter={selected_chapter}"
+            )
             
             # Few-shot 예시 추가
-            few_shot_examples = state.get("few_shot_examples", [])
-            max_few_shot_examples = state.get("max_few_shot_examples", 5)
-            category_examples = state.get("category_examples", {})
-            category_weights = state.get("category_weights", {})
+            few_shot_examples = payload.get("few_shot_examples") or state.get("few_shot_examples", [])
+            max_few_shot_examples = payload.get("max_few_shot_examples") or state.get("max_few_shot_examples", 5)
+            category_examples = payload.get("category_examples") or state.get("category_examples", {})
+            category_weights = payload.get("category_weights") or state.get("category_weights", {})
             
             logger.debug(f"Few-shot 설정: max={max_few_shot_examples}, 카테고리={len(category_examples)}개")
             
@@ -154,12 +179,17 @@ def create_mcq_generate_node(
             chain = prompt | llm | parser
             
             # LLM 호출 전 로깅
-            logger.debug(f"LLM 호출: 쿼리='{state['selected_topic_query'][:50]}...', 컨텍스트={len(state['formatted_context'])}자")
+            topic_preview = (selected_topic or "")[:50]
+            logger.debug(
+                "LLM 호출: 쿼리='%s...', 컨텍스트=%s자",
+                topic_preview,
+                len(formatted_context),
+            )
             
             generated_mcq = chain.invoke({
-                "context": state["formatted_context"],
-                "question": state["selected_topic_query"],
-                "instruction": state["instruction"],
+                "context": formatted_context,
+                "question": selected_topic,
+                "instruction": instruction,
             })
             
             # 리스트로 반환된 경우 첫 번째 항목 사용 (방어 코드)

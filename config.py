@@ -336,8 +336,9 @@ def get_mcq_generation_config() -> Dict[str, Any]:
     """
     return {
         "random_sample_max": int(os.getenv("MCQ_RANDOM_SAMPLE_MAX", "1000")),
-        "few_shot_max_examples": int(os.getenv("MCQ_FEW_SHOT_MAX_EXAMPLES", "3")),  # 3개 예시 (명확한 형식 지시)
+        "few_shot_max_examples": int(os.getenv("MCQ_FEW_SHOT_MAX_EXAMPLES", "1")),  # 1개 예시 (명확한 형식 지시)
         "few_shot_folder_path": os.getenv("MCQ_FEW_SHOT_FOLDER_PATH", "Data/Few_Shot"),
+        "max_context_docs": int(os.getenv("MCQ_MAX_CONTEXT_DOCS", "3")),
         
         # Part별 가중치 (전체 비율, 실제 메타데이터 형식 사용)
         # 주의: 메타데이터는 짧은 형식 ("총론", "법령", "각론")
@@ -615,8 +616,7 @@ def get_prompt_templates() -> Dict[str, str]:
     Returns:
         프롬프트 템플릿 딕셔너리
         - mcq_generation_system: 시스템 프롬프트
-        - mcq_generation_human_retriever: Retriever 기반 프롬프트
-        - mcq_generation_human_document: 문서 기반 프롬프트
+        - mcq_generation_human_retriever: Retriever 기반 프롬프트 (주제 기반 생성)
     
     Example:
         >>> templates = get_prompt_templates()
@@ -626,16 +626,14 @@ def get_prompt_templates() -> Dict[str, str]:
     
     try:
         # 프롬프트 파일에서 로드
-        system_prompt = (prompt_dir / "mcq_system_prompt.txt").read_text(encoding="utf-8")
-        human_retriever = (prompt_dir / "mcq_human_retriever_prompt.txt").read_text(encoding="utf-8")
-        human_document = (prompt_dir / "mcq_human_document_prompt.txt").read_text(encoding="utf-8")
+        system_prompt = (prompt_dir / "system_prompt.txt").read_text(encoding="utf-8")
+        human_retriever = (prompt_dir / "retriever_prompt.txt").read_text(encoding="utf-8")
         
         _config_logger.debug("프롬프트 템플릿 로드 완료 (파일에서)")
         
         return {
             "mcq_generation_system": system_prompt,
             "mcq_generation_human_retriever": human_retriever,
-            "mcq_generation_human_document": human_document,
         }
         
     except FileNotFoundError as e:
@@ -650,11 +648,6 @@ def get_prompt_templates() -> Dict[str, str]:
             "mcq_generation_human_retriever": (
                 "교재 내용:\n{context}\n\n"
                 "주제: {question}\n\n"
-                "지침:\n{instruction}\n\n"
-                "{format_instructions}"
-            ),
-            "mcq_generation_human_document": (
-                "교재 내용:\n{context}\n\n"
                 "지침:\n{instruction}\n\n"
                 "{format_instructions}"
             ),

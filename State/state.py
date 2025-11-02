@@ -74,8 +74,14 @@ class State(TypedDict):
     
     # 문서 검색
     retrieved_documents: List[Document]  # 검색된 문서 (MCQ용)
+    selected_documents: List[Document]  # 선택된 문서 서브셋
     num_documents: int  # 문서 수 (MCQ용)
     recent_document_ids: List[str]  # 최근 사용된 문서 ID (문서 다양성 보장용, 최대 20개)
+    context_document_ids: List[str]  # 검색된 문서 ID 리스트
+    context_section_ids: List[str]  # 검색된 문서의 섹션 ID 리스트
+    selected_document_ids: List[str]  # 선택된 문서 ID 리스트
+    selected_section_ids: List[str]  # 선택된 문서의 섹션 ID 리스트
+    generation_payload: Dict[str, Any]  # LLM 호출에 필요한 페이로드
     
     # MCQ 생성
     instruction: str  # MCQ 생성 지침
@@ -83,8 +89,13 @@ class State(TypedDict):
     category_examples: Dict[str, List[Dict[str, Any]]]  # 카테고리별 예시
     category_weights: Dict[str, float]  # 카테고리별 가중치
     max_few_shot_examples: int  # Few-shot 예시 최대 개수
+    max_context_docs: int  # 컨텍스트로 사용할 문서 최대 개수
     recent_few_shot_indices: List[int]  # 최근 사용된 Few-shot 예시 인덱스 (다양성 보장용, 최대 10개)
     generated_mcq: Optional[Dict[str, Any]]  # 생성된 MCQ
+    
+    # 프롬프트 (범위별 동적 로딩)
+    system_prompt: Optional[str]  # 동적으로 로드된 시스템 프롬프트
+    retriever_prompt: Optional[str]  # 동적으로 로드된 retriever 프롬프트
     
     # 검증
     is_valid: bool  # 유효성 검증 결과
@@ -96,6 +107,9 @@ class State(TypedDict):
     
     # 출력
     final_mcq: Optional[Dict[str, Any]]  # 최종 MCQ (메타데이터 포함)
+    used_section_ids: List[str]  # 세션 동안 이미 사용한 섹션 ID
+    used_document_ids: List[str]  # 세션 동안 이미 사용한 문서 ID
+    used_question_hashes: List[str]  # 세션 동안 이미 사용한 문항 해시
 
 
 # ==================== Helper 함수 ====================
@@ -114,6 +128,10 @@ def create_state(
     category_weights: Optional[Dict[str, float]] = None,
     max_few_shot_examples: int = 5,
     max_retries: int = 6,
+    max_context_docs: int = 3,
+    used_section_ids: Optional[List[str]] = None,
+    used_document_ids: Optional[List[str]] = None,
+    used_question_hashes: Optional[List[str]] = None,
     recent_chapters: Optional[List[str]] = None,
 ) -> State:
     """
@@ -188,8 +206,14 @@ def create_state(
 
         # Forge Mode - 문서
         retrieved_documents=[],
+        selected_documents=[],
         num_documents=0,
         recent_document_ids=[],  # 최근 사용된 문서 ID (문서 다양성 보장용)
+        context_document_ids=[],
+        context_section_ids=[],  # 검색된 문서 섹션 ID 리스트
+        selected_document_ids=[],
+        selected_section_ids=[],
+        generation_payload={},
         
         # Forge Mode - 생성
         instruction=instruction,
@@ -197,8 +221,13 @@ def create_state(
         category_examples=category_examples or {},
         category_weights=category_weights or {},
         max_few_shot_examples=max_few_shot_examples,
+        max_context_docs=max_context_docs,
         recent_few_shot_indices=[],  # 최근 사용된 Few-shot 예시 인덱스 (다양성 보장용)
         generated_mcq=None,
+        
+        # Forge Mode - 프롬프트 (동적 로딩)
+        system_prompt=None,
+        retriever_prompt=None,
         
         # Forge Mode - 검증
         is_valid=False,
@@ -210,6 +239,11 @@ def create_state(
         
         # Forge Mode - 출력
         final_mcq=None,
+
+        # Forge Mode - 사용 이력
+        used_section_ids=list(used_section_ids or []),
+        used_document_ids=list(used_document_ids or []),
+        used_question_hashes=list(used_question_hashes or []),
     )
 
 
@@ -257,6 +291,10 @@ def reset_forge_fields(state: State) -> None:
     state["final_mcq"] = None
     state["error"] = None
     state["should_retry"] = False
+    
+    # 프롬프트 초기화 (다음 생성 시 새로 선택)
+    state["system_prompt"] = None
+    state["retriever_prompt"] = None
 
 
 # 히스토리 관리 함수들은 Utils/session.py로 이동되었습니다.

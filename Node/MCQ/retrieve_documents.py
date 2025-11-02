@@ -69,6 +69,19 @@ def get_document_id(doc: "Document") -> str:
     return f"hash_{doc_hash}"
 
 
+def build_section_id(doc: "Document") -> str:
+    """문서 메타데이터를 활용해 섹션 ID를 생성합니다."""
+    metadata = doc.metadata if hasattr(doc, "metadata") and doc.metadata else {}
+    base_id = get_document_id(doc)
+    title = metadata.get("title", "")
+    chapter = metadata.get("chapter", "")
+    section = metadata.get("section", "")
+    page = metadata.get("page_number", "")
+    part = metadata.get("part", "")
+    elements = [base_id, part, chapter, section, str(page), title]
+    return "|".join(str(elem).strip() for elem in elements if str(elem).strip())
+
+
 def rerank_documents(
     query: str,
     documents: List["Document"],
@@ -258,6 +271,40 @@ def create_mcq_retrieve_documents_node(
                     else:
                         logger.info(f"   Reranking 건너뜀 (문서 {len(documents)}개 ≤ {k}개)")
                     
+                    section_ids = [build_section_id(doc) for doc in documents]
+                    document_ids = [get_document_id(doc) for doc in documents]
+                    used_sections = set(state.get("used_section_ids", []))
+                    used_docs = set(state.get("used_document_ids", []))
+
+                    if used_sections or used_docs:
+                        filtered_triplets = [
+                            (doc, doc_id, section_id)
+                            for doc, doc_id, section_id in zip(documents, document_ids, section_ids)
+                            if section_id not in used_sections and doc_id not in used_docs
+                        ]
+
+                        if filtered_triplets:
+                            documents = [triplet[0] for triplet in filtered_triplets]
+                            document_ids = [triplet[1] for triplet in filtered_triplets]
+                            section_ids = [triplet[2] for triplet in filtered_triplets]
+                        else:
+                            logger.warning("   사용된 섹션/문서로만 구성되어 재검색 필요")
+                            return error_handler.handle_error(
+                                error=ValueError("사용할 수 있는 새로운 섹션이 없습니다"),
+                                state=state,
+                                node_name="retrieve_documents",
+                                recoverable=True,
+                                return_fields={
+                                    "selected_part": selected_part,
+                                    "selected_chapter": selected_chapter,
+                                    "selected_topic_query": query,
+                                    "retrieved_documents": [],
+                                    "num_documents": 0,
+                                    "context_document_ids": [],
+                                    "context_section_ids": [],
+                                }
+                            )
+
                     # recent_document_ids 업데이트
                     return_fields = {
                         "selected_part": selected_part,
@@ -268,9 +315,13 @@ def create_mcq_retrieve_documents_node(
                     }
                     
                     if documents:
-                        current_doc_ids = [get_document_id(doc) for doc in documents]
-                        updated_recent_ids = (recent_doc_ids + current_doc_ids)[-20:]  # 최근 20개만 유지
+                        updated_recent_ids = (recent_doc_ids + document_ids)[-20:]  # 최근 20개만 유지
                         return_fields["recent_document_ids"] = updated_recent_ids
+                        return_fields["context_document_ids"] = document_ids
+                        return_fields["context_section_ids"] = section_ids
+                    else:
+                        return_fields["context_document_ids"] = []
+                        return_fields["context_section_ids"] = []
                     
                     # 성공 처리 (early return)
                     return error_handler.handle_success(
@@ -394,6 +445,9 @@ def create_mcq_retrieve_documents_node(
                         "selected_topic_query": query,
                         "retrieved_documents": [],
                         "num_documents": 0,
+                                    "context_document_ids": [],
+                        "context_document_ids": [],
+                        "context_section_ids": [],
                     }
                 )
             
@@ -422,6 +476,40 @@ def create_mcq_retrieve_documents_node(
             else:
                 logger.info(f"   Reranking 건너뜀 (문서 {len(documents)}개 ≤ {k}개)")
             
+            section_ids = [build_section_id(doc) for doc in documents]
+            document_ids = [get_document_id(doc) for doc in documents]
+            used_sections = set(state.get("used_section_ids", []))
+            used_docs = set(state.get("used_document_ids", []))
+
+            if used_sections or used_docs:
+                filtered_triplets = [
+                    (doc, doc_id, section_id)
+                    for doc, doc_id, section_id in zip(documents, document_ids, section_ids)
+                    if section_id not in used_sections and doc_id not in used_docs
+                ]
+
+                if filtered_triplets:
+                    documents = [triplet[0] for triplet in filtered_triplets]
+                    document_ids = [triplet[1] for triplet in filtered_triplets]
+                    section_ids = [triplet[2] for triplet in filtered_triplets]
+                else:
+                    logger.warning("   사용된 섹션/문서로만 구성되어 재검색 필요")
+                    return error_handler.handle_error(
+                        error=ValueError("사용할 수 있는 새로운 섹션이 없습니다"),
+                        state=state,
+                        node_name="retrieve_documents",
+                        recoverable=True,
+                        return_fields={
+                            "selected_part": selected_part,
+                            "selected_chapter": selected_chapter,
+                            "selected_topic_query": query,
+                            "retrieved_documents": [],
+                            "num_documents": 0,
+                            "context_document_ids": [],
+                            "context_section_ids": [],
+                        }
+                    )
+
             # 8-1. 검색된 문서 ID를 recent_document_ids에 추가 (순환 큐 방식, 최대 20개)
             return_fields = {
                 "selected_part": selected_part,
@@ -432,9 +520,13 @@ def create_mcq_retrieve_documents_node(
             }
             
             if documents:
-                current_doc_ids = [get_document_id(doc) for doc in documents]
-                updated_recent_ids = (recent_doc_ids + current_doc_ids)[-20:]  # 최근 20개만 유지
+                updated_recent_ids = (recent_doc_ids + document_ids)[-20:]  # 최근 20개만 유지
                 return_fields["recent_document_ids"] = updated_recent_ids
+                return_fields["context_document_ids"] = document_ids
+                return_fields["context_section_ids"] = section_ids
+            else:
+                return_fields["context_document_ids"] = []
+                return_fields["context_section_ids"] = []
             
             return error_handler.handle_success(
                 node_name="retrieve_documents",
@@ -453,6 +545,8 @@ def create_mcq_retrieve_documents_node(
                 return_fields={
                     "retrieved_documents": [],
                     "num_documents": 0,
+                    "context_document_ids": [],
+                    "context_section_ids": [],
                 }
             )
     

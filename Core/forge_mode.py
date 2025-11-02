@@ -12,6 +12,7 @@ Forge Mode - MCQ 생성 모드
 """
 
 import logging
+import hashlib
 from typing import Any, Dict, List, Optional
 
 # LangChain & LangGraph
@@ -51,7 +52,9 @@ except ImportError:
 from State import State, create_state
 from Node.MCQ import (
     create_mcq_retrieve_documents_node,
+    create_mcq_select_context_node,
     create_mcq_format_context_node,
+    create_mcq_prepare_payload_node,
     create_mcq_generate_node,
     create_mcq_validate_node,
     create_mcq_format_output_node,
@@ -60,6 +63,49 @@ from Node.MCQ import (
 # Edge & Utils
 from Edge import build_mcq_workflow_edges
 from Utils import VectorSearchUtils, setup_logging
+
+
+class QuestionPoolManager:
+    """세션 전반에서 사용된 문항 소스를 추적합니다."""
+
+    def __init__(self) -> None:
+        self.used_section_ids: set[str] = set()
+        self.used_document_ids: set[str] = set()
+        self.used_question_hashes: set[str] = set()
+
+    def snapshot(self) -> Dict[str, List[str]]:
+        return {
+            "used_section_ids": list(self.used_section_ids),
+            "used_document_ids": list(self.used_document_ids),
+            "used_question_hashes": list(self.used_question_hashes),
+        }
+
+    def register_sections(self, section_ids: List[str]) -> None:
+        self.used_section_ids.update(filter(None, section_ids))
+
+    def register_documents(self, document_ids: List[str]) -> None:
+        self.used_document_ids.update(filter(None, document_ids))
+
+    def register_question(self, mcq: Dict[str, Any]) -> None:
+        digest = mcq.get("question_hash")
+        if not digest:
+            question = mcq.get("question", "")
+            options = mcq.get("options", [])
+            signature = "||".join([question.strip()] + [opt.strip() for opt in options])
+            digest = hashlib.sha256(signature.encode("utf-8")).hexdigest()
+        self.used_question_hashes.add(digest)
+
+        section_ids = mcq.get("doc_section_ids") or []
+        if isinstance(section_ids, list):
+            self.register_sections(section_ids)
+        elif section_ids:
+            self.register_sections([section_ids])
+
+        document_ids = mcq.get("doc_document_ids") or []
+        if isinstance(document_ids, list):
+            self.register_documents(document_ids)
+        elif document_ids:
+            self.register_documents([document_ids])
 
 
 class ForgeMode:
@@ -118,7 +164,8 @@ class ForgeMode:
         self.retriever_config = get_retriever_config()
         self.mcq_config = get_mcq_generation_config()
         self.mcq_types = get_mcq_types()
-        self.prompt_templates = get_prompt_templates()
+        # self.prompt_templates 제거 - State에서 동적으로 로드
+        self.max_context_docs = self.mcq_config.get("max_context_docs", 3)
         
         if custom_config:
             self.retriever_config.update(custom_config)
@@ -129,6 +176,7 @@ class ForgeMode:
         
         # 유틸리티
         self.vector_search_utils = VectorSearchUtils()
+        self.pool_manager = QuestionPoolManager()
         
         # 노드 초기화
         self._initialize_nodes()
@@ -144,19 +192,30 @@ class ForgeMode:
     def _initialize_nodes(self) -> None:
         """노드 함수 초기화 (팩토리 패턴)"""
         
-        # select_part와 select_chapter 노드는 제거됨
+        from Node.MCQ import create_mcq_select_prompt_node
+        
+        # 문서 검색 노드 (Part/Chapter 결정)
         self.retrieve_documents = create_mcq_retrieve_documents_node(
             vector_store=self.vector_store,
             vector_search_utils=self.vector_search_utils,
             retriever_config=self.retriever_config,
             logger=self.logger,
         )
+        
+        # 프롬프트 선택 노드 (범위별 동적 로딩)
+        self.select_prompt = create_mcq_select_prompt_node(self.logger)
+        
+        # 나머지 노드들
+        self.select_context = create_mcq_select_context_node(self.logger)
         self.format_context = create_mcq_format_context_node(self.logger)
+        self.prepare_payload = create_mcq_prepare_payload_node(self.logger)
+        
+        # MCQ 생성 노드 (prompt_templates 제거, State에서 읽음)
         self.generate_mcq_node = create_mcq_generate_node(
             llm=self.llm,
-            prompt_templates=self.prompt_templates,
             logger=self.logger,
         )
+        
         self.validate_mcq = create_mcq_validate_node(self.logger)
         self.format_output = create_mcq_format_output_node(self.logger)
         
@@ -175,9 +234,12 @@ class ForgeMode:
             # 1. StateGraph 생성
             workflow = StateGraph(State)
             
-            # 2. 노드 추가 (명시적 정의) - select_part와 select_chapter 제거됨
+            # 2. 노드 추가 (명시적 정의)
             workflow.add_node("retrieve_documents", self.retrieve_documents)
+            workflow.add_node("select_prompt", self.select_prompt)
+            workflow.add_node("select_context_chunk", self.select_context)
             workflow.add_node("format_context", self.format_context)
+            workflow.add_node("prepare_generation_payload", self.prepare_payload)
             workflow.add_node("generate_mcq", self.generate_mcq_node)
             workflow.add_node("validate_mcq", self.validate_mcq)
             workflow.add_node("format_output", self.format_output)
@@ -274,6 +336,8 @@ class ForgeMode:
                 self.logger.info(f"기본 카테고리 가중치 사용: {final_category_weights}")
             
             # 초기 상태 생성
+            pool_snapshot = self.pool_manager.snapshot()
+
             initial_state = create_state(
                 execution_mode="forge",
                 user_topic=user_topic,  # 사용자 주제 전달
@@ -285,6 +349,10 @@ class ForgeMode:
                 category_weights=final_category_weights,
                 max_few_shot_examples=max_few_shot,
                 max_retries=max_retries,
+                max_context_docs=self.max_context_docs,
+                used_section_ids=pool_snapshot["used_section_ids"],
+                used_document_ids=pool_snapshot["used_document_ids"],
+                used_question_hashes=pool_snapshot["used_question_hashes"],
             )
             
             # 워크플로우 실행
@@ -306,6 +374,12 @@ class ForgeMode:
                     "chapter": mcq["selected_chapter"],
                     "available_chapters": final_state.get("available_chapters", []),
                 })
+
+                selected_section_ids = final_state.get("selected_section_ids", [])
+                selected_document_ids = final_state.get("selected_document_ids", [])
+                self.pool_manager.register_sections(selected_section_ids)
+                self.pool_manager.register_documents(selected_document_ids)
+                self.pool_manager.register_question(mcq)
                 
                 self.logger.info("✅ MCQ 생성 완료")
                 return mcq
@@ -365,6 +439,8 @@ class ForgeMode:
                 category_weights = self.mcq_config.get("category_weights", {})
                 
                 # 초기 상태 생성 (recent_chapters 포함)
+                pool_snapshot = self.pool_manager.snapshot()
+
                 initial_state = create_state(
                     execution_mode="forge",
                     topics_nested=topics_nested,
@@ -375,7 +451,11 @@ class ForgeMode:
                     category_weights=category_weights,
                     max_few_shot_examples=max_few_shot,
                     max_retries=max_retries,
+                    max_context_docs=self.max_context_docs,
                     recent_chapters=recent_chapters,  # 중복 방지용
+                    used_section_ids=pool_snapshot["used_section_ids"],
+                    used_document_ids=pool_snapshot["used_document_ids"],
+                    used_question_hashes=pool_snapshot["used_question_hashes"],
                 )
                 
                 # 워크플로우 실행
@@ -389,6 +469,11 @@ class ForgeMode:
                 if final_state.get("final_mcq"):
                     mcq = final_state["final_mcq"]
                     mcqs.append(mcq)
+                    selected_section_ids = final_state.get("selected_section_ids", [])
+                    selected_document_ids = final_state.get("selected_document_ids", [])
+                    self.pool_manager.register_sections(selected_section_ids)
+                    self.pool_manager.register_documents(selected_document_ids)
+                    self.pool_manager.register_question(mcq)
                     
                     # 생성된 Chapter 기록 (최근 N개만 유지)
                     chapter = mcq.get("selected_chapter", "")
