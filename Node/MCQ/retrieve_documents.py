@@ -266,7 +266,6 @@ def create_mcq_retrieve_documents_node(
                     
                     # 랜덤 샘플링 (다양성 극대화)
                     if len(documents) > k:
-                        import random
                         original_count = len(documents)
                         documents = random.sample(documents, k)
                         logger.info(f"✅ 랜덤 선택: {original_count}개 → {k}개 (다양성 우선)")
