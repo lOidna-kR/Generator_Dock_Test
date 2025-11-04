@@ -307,7 +307,7 @@ async def forge_endpoint(request: ForgeRequest):
     topic = request.topic.strip()
     
     try:
-        logger.info(f"[Forge] 주제: {topic}, 개수: {count}")
+        logger.info(f"[Forge Batch] 주제: {topic}, 개수: {count}")
         
         # 교재 구조 가져오기
         textbook_structure = get_textbook_structure()
@@ -317,31 +317,52 @@ async def forge_endpoint(request: ForgeRequest):
         
         # 카테고리 가중치 가져오기
         category_weights = get_category_weights_by_topic(topic)
-        logger.info(f"[Forge] 카테고리 가중치: {category_weights}")
+        logger.info(f"[Forge Batch] 카테고리 가중치: {category_weights}")
         
-        # MCQ 생성
-        generated_mcqs = []
-        for i in range(count):
-            try:
-                logger.info(f"[Forge] MCQ {i+1}/{count} 생성 중...")
-                
-                # 특정 Chapter인지 확인
-                is_chapter = topic in ["전문심장소생술", "전문외상처치술", "내과응급", "특수응급"]
-                
-                mcq = forge_mode.generate_mcq(
-                    topics_hierarchical=filtered_structure,
-                    topics_nested=None,
-                    user_topic=topic if is_chapter else None,
-                    max_retries=6,
-                    category_weights=category_weights if category_weights else None
-                )
-                generated_mcqs.append(mcq)
-                logger.info(f"[Forge] MCQ {i+1}/{count} 생성 완료")
-                
-            except Exception as e:
-                logger.error(f"[Forge] MCQ {i+1}/{count} 생성 실패: {e}")
-                # 실패해도 계속 진행
-                continue
+        # 특정 Chapter인지 확인
+        is_specific_chapter = topic in ["전문심장소생술", "전문외상처치술", "내과응급", "특수응급"]
+        
+        # MCQ 생성 (배치 또는 개별)
+        if is_specific_chapter and count > 1:
+            # 특정 Chapter + 여러 개: 개별 생성 (user_topic 지정 필요)
+            logger.info(f"[Forge Batch] 특정 주제 개별 생성 모드: {topic}")
+            generated_mcqs = []
+            
+            # 리듬/다양성 추적을 위한 카운터
+            rhythm_counter = {}
+            question_type_counter = {}
+            time_counter = {}
+            logic_counter = {}
+            
+            for i in range(count):
+                try:
+                    logger.info(f"[Forge Batch] MCQ {i+1}/{count} 생성 중...")
+                    
+                    mcq = forge_mode.generate_mcq(
+                        topics_hierarchical=filtered_structure,
+                        topics_nested=None,
+                        user_topic=topic,
+                        max_retries=6,
+                        category_weights=category_weights,
+                        rhythm_counter=rhythm_counter,
+                        question_type_counter=question_type_counter,
+                        time_counter=time_counter,
+                        logic_counter=logic_counter
+                    )
+                    generated_mcqs.append(mcq)
+                    logger.info(f"[Forge Batch] MCQ {i+1}/{count} 생성 완료")
+                    
+                except Exception as e:
+                    logger.error(f"[Forge Batch] MCQ {i+1}/{count} 생성 실패: {e}")
+                    continue
+        else:
+            # 일반 주제 또는 단일 생성: 배치 메서드 활용 (더 효율적)
+            logger.info(f"[Forge Batch] 배치 생성 모드 (중복 방지, 풀 관리)")
+            generated_mcqs = forge_mode.generate_mcq_batch(
+                topics_hierarchical=filtered_structure,
+                count=count,
+                max_retries=6
+            )
         
         if not generated_mcqs:
             raise ValueError("MCQ 생성에 실패했습니다")
@@ -364,7 +385,7 @@ async def forge_endpoint(request: ForgeRequest):
                 logger.warning(f"[Forge] MCQ 변환 실패: {e}")
                 continue
         
-        logger.info(f"[Forge] 완료: {len(mcqs)}개 생성")
+        logger.info(f"[Forge Batch] 완료: {len(mcqs)}개 생성 (요청: {count}개)")
         
         return ForgeResponse(
             mcqs=mcqs,
@@ -374,10 +395,10 @@ async def forge_endpoint(request: ForgeRequest):
         )
         
     except Exception as e:
-        logger.error(f"[Forge] 오류: {e}", exc_info=True)
+        logger.error(f"[Forge Batch] 오류: {e}", exc_info=True)
         raise HTTPException(
             status_code=500,
-            detail=f"MCQ 생성 중 오류가 발생했습니다: {str(e)}"
+            detail=f"MCQ 배치 생성 중 오류가 발생했습니다: {str(e)}"
         )
 
 @app.get("/api/textbook", response_model=TextbookStructure)
