@@ -110,6 +110,12 @@ class State(TypedDict):
     used_section_ids: List[str]  # 세션 동안 이미 사용한 섹션 ID
     used_document_ids: List[str]  # 세션 동안 이미 사용한 문서 ID
     used_question_hashes: List[str]  # 세션 동안 이미 사용한 문항 해시
+    
+    # 다양성 추적 (배치 생성 시)
+    rhythm_counter: Dict[str, int]  # 리듬별 사용 횟수 (예: {"VF": 1, "Asystole": 2})
+    question_type_counter: Dict[str, int]  # 질문 형식별 사용 횟수 (예: {"긍정형": 3, "부정형": 1})
+    time_counter: Dict[str, int]  # 시간대별 사용 횟수 (예: {"새벽": 2, "오후": 1})
+    logic_counter: Dict[str, int]  # 논리(5H5T) 원인별 사용 횟수 (예: {"폐색전증": 1, "저혈량": 2})
 
 
 # ==================== Helper 함수 ====================
@@ -133,6 +139,10 @@ def create_state(
     used_document_ids: Optional[List[str]] = None,
     used_question_hashes: Optional[List[str]] = None,
     recent_chapters: Optional[List[str]] = None,
+    rhythm_counter: Optional[Dict[str, int]] = None,
+    question_type_counter: Optional[Dict[str, int]] = None,
+    time_counter: Optional[Dict[str, int]] = None,
+    logic_counter: Optional[Dict[str, int]] = None,
 ) -> State:
     """
     통합 State 초기화 함수
@@ -244,6 +254,12 @@ def create_state(
         used_section_ids=list(used_section_ids or []),
         used_document_ids=list(used_document_ids or []),
         used_question_hashes=list(used_question_hashes or []),
+        
+        # 다양성 추적
+        rhythm_counter=dict(rhythm_counter or {}),
+        question_type_counter=dict(question_type_counter or {}),
+        time_counter=dict(time_counter or {}),
+        logic_counter=dict(logic_counter or {}),
     )
 
 

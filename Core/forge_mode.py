@@ -269,6 +269,10 @@ class ForgeMode:
         user_topic: Optional[str] = None,
         max_retries: int = 6,
         category_weights: Optional[Dict[str, float]] = None,
+        rhythm_counter: Optional[Dict[str, int]] = None,
+        question_type_counter: Optional[Dict[str, int]] = None,
+        time_counter: Optional[Dict[str, int]] = None,
+        logic_counter: Optional[Dict[str, int]] = None,
     ) -> Dict[str, Any]:
         """
         MCQ 생성 (주제 기반 또는 랜덤)
@@ -353,6 +357,10 @@ class ForgeMode:
                 used_section_ids=pool_snapshot["used_section_ids"],
                 used_document_ids=pool_snapshot["used_document_ids"],
                 used_question_hashes=pool_snapshot["used_question_hashes"],
+                rhythm_counter=rhythm_counter,  # 리듬 카운터 전달
+                question_type_counter=question_type_counter,  # 질문 형식 카운터 전달
+                time_counter=time_counter,  # 시간대 카운터 전달
+                logic_counter=logic_counter,  # 논리(5H5T) 카운터 전달
             )
             
             # 워크플로우 실행

@@ -379,6 +379,14 @@ def handle_mock_exam_mode(forge_mode, logger, textbook_structure) -> tuple:
     generated_mcqs = []
     mcq_count = 0
     retry_limit = 10
+    rhythm_counter = {}  # 리듬 추적기 초기화
+    
+    # 리듬 추출 함수 임포트
+    from Utils.rhythm_tracker import (
+        extract_rhythm_from_mcq, 
+        should_reject_rhythm,
+        get_korean_rhythm_name
+    )
     
     # 결정론적으로 할당된 Chapter별로 문제 생성
     for i, selected_chapter in enumerate(chapter_allocation, 1):
@@ -391,17 +399,41 @@ def handle_mock_exam_mode(forge_mode, logger, textbook_structure) -> tuple:
             try:
                 print(f"[{i}/40] 생성 중... ({selected_chapter})")
                 
-                # 특정 Chapter로 문제 생성
+                # 특정 Chapter로 문제 생성 (리듬 카운터 전달)
                 mcq = forge_mode.generate_mcq(
                     topics_hierarchical=full_structure,
                     topics_nested=None,
                     user_topic=selected_chapter,  # 특정 Chapter 지정
                     max_retries=6,
-                    category_weights=chapter_category_weights  # Chapter별 카테고리 가중치 적용
+                    category_weights=chapter_category_weights,  # Chapter별 카테고리 가중치 적용
+                    rhythm_counter=rhythm_counter  # 리듬 카운터 전달
                 )
+                
+                # 리듬 추출 및 검증 (전문심장소생술만)
+                if selected_chapter == "전문심장소생술":
+                    rhythm = extract_rhythm_from_mcq(mcq)
+                    if rhythm:
+                        # 리듬이 2회 초과인지 체크
+                        if should_reject_rhythm(rhythm_counter, rhythm, max_count=2):
+                            retry_count += 1
+                            korean_name = get_korean_rhythm_name(rhythm)
+                            logger.warning(
+                                f"[{i}] 리듬 '{rhythm}({korean_name})' 이미 2회 사용됨, 재시도 중... "
+                                f"({retry_count}/{retry_limit})"
+                            )
+                            print(f"   🔄 리듬 중복 ({korean_name}), 재생성 중...")
+                            continue
                 
                 # 중복 체크
                 if mcq and not is_duplicate_mcq(mcq, generated_mcqs):
+                    # 성공: 리듬 카운터 업데이트 (전문심장소생술만)
+                    if selected_chapter == "전문심장소생술":
+                        rhythm = extract_rhythm_from_mcq(mcq)
+                        if rhythm:
+                            rhythm_counter[rhythm] = rhythm_counter.get(rhythm, 0) + 1
+                            korean_name = get_korean_rhythm_name(rhythm)
+                            logger.info(f"[{i}] 리듬 '{rhythm}({korean_name})' 사용 (현재 {rhythm_counter[rhythm]}회)")
+                    
                     generated_mcqs.append(mcq)
                     mcq_count += 1
                     print(f"   ✅ 생성 완료 - {selected_chapter}")
@@ -422,6 +454,13 @@ def handle_mock_exam_mode(forge_mode, logger, textbook_structure) -> tuple:
         if retry_count >= retry_limit:
             logger.error(f"[{i}] 최대 재시도 횟수 초과")
             print(f"   ⚠️  중복 방지 실패 (10회 재시도)")
+    
+    # 배치 생성 완료 후 리듬 통계 출력
+    if rhythm_counter:
+        print(f"\n📊 전문심장소생술 리듬 분포:")
+        for rhythm, count in sorted(rhythm_counter.items(), key=lambda x: -x[1]):
+            korean_name = get_korean_rhythm_name(rhythm)
+            print(f"   - {korean_name} ({rhythm}): {count}개")
     
     # 결과 저장
     if generated_mcqs:
@@ -463,19 +502,57 @@ def is_duplicate_mcq(new_mcq: dict, existing_mcqs: list, similarity_threshold: f
     # 질문 + 모든 보기를 결합한 텍스트 생성
     new_content = new_question + " " + " ".join([opt.strip().lower() for opt in new_options])
     
+    # 케이스 시나리오 추출 (연령, 성별, 상황)
+    import re
+    new_scenario = ""
+    age_match = re.search(r'(\d+대|\d+세)', new_question)
+    gender_match = re.search(r'(남성|여성|소아|영아)', new_question)
+    location_match = re.search(r'(등산|공사|헬스장|회사|자택|사무실|병원|응급실|현장|거리|학교)', new_question)
+    
+    if age_match:
+        new_scenario += age_match.group(1) + " "
+    if gender_match:
+        new_scenario += gender_match.group(1) + " "
+    if location_match:
+        new_scenario += location_match.group(1)
+    
     # 같은 Chapter에서 생성된 문제들만 필터링 (더 엄격한 체크용)
     same_chapter_mcqs = []
     if new_chapter:
         same_chapter_mcqs = [mcq for mcq in existing_mcqs 
                             if mcq.get('selected_chapter', '') == new_chapter]
     
-    # 같은 Chapter 내에서는 더 엄격한 임계값 사용 (0.75)
-    chapter_threshold = 0.75 if same_chapter_mcqs else similarity_threshold
+    # 같은 Chapter 내에서는 더 엄격한 임계값 사용 (0.85로 완화)
+    chapter_threshold = 0.85 if same_chapter_mcqs else similarity_threshold
     
     # 모든 기존 문제와 비교
     for existing_mcq in existing_mcqs:
         existing_question = existing_mcq.get('question', '').strip().lower()
         existing_options = existing_mcq.get('options', [])
+        
+        # 기존 문제 케이스 시나리오 추출
+        existing_scenario = ""
+        age_match_ex = re.search(r'(\d+대|\d+세)', existing_question)
+        gender_match_ex = re.search(r'(남성|여성|소아|영아)', existing_question)
+        location_match_ex = re.search(r'(등산|공사|헬스장|회사|자택|사무실|병원|응급실|현장|거리|학교)', existing_question)
+        
+        if age_match_ex:
+            existing_scenario += age_match_ex.group(1) + " "
+        if gender_match_ex:
+            existing_scenario += gender_match_ex.group(1) + " "
+        if location_match_ex:
+            existing_scenario += location_match_ex.group(1)
+        
+        # 케이스 시나리오가 90% 이상 유사하면 중복 (연령+성별+장소)
+        if new_scenario and existing_scenario:
+            # 단어 기반 비교
+            new_words = set(new_scenario.split())
+            existing_words = set(existing_scenario.split())
+            if new_words and existing_words:
+                overlap = len(new_words.intersection(existing_words))
+                similarity_scenario = overlap / len(new_words)
+                if similarity_scenario >= 0.9:  # 90% 이상 유사
+                    return True
         existing_section_ids = set(existing_mcq.get('doc_section_ids', []) or [])
         single_existing_section = existing_mcq.get('doc_section_id')
         if single_existing_section:
@@ -486,12 +563,18 @@ def is_duplicate_mcq(new_mcq: dict, existing_mcqs: list, similarity_threshold: f
             existing_document_ids.add(single_existing_document)
         existing_question_hash = existing_mcq.get('question_hash')
 
-        # 동일한 섹션이면 중복 처리
-        if new_section_ids and existing_section_ids and new_section_ids.intersection(existing_section_ids):
-            return True
+        # 섹션/문서 ID 중복: 대부분(70% 이상) 겹쳐야 중복으로 판단
+        if new_section_ids and existing_section_ids:
+            overlap_sections = len(new_section_ids.intersection(existing_section_ids))
+            total_sections = len(new_section_ids)
+            if total_sections > 0 and overlap_sections / total_sections >= 0.7:
+                return True
 
-        if new_document_ids and existing_document_ids and new_document_ids.intersection(existing_document_ids):
-            return True
+        if new_document_ids and existing_document_ids:
+            overlap_docs = len(new_document_ids.intersection(existing_document_ids))
+            total_docs = len(new_document_ids)
+            if total_docs > 0 and overlap_docs / total_docs >= 0.7:
+                return True
 
         if new_question_hash and existing_question_hash and new_question_hash == existing_question_hash:
             return True
@@ -521,9 +604,9 @@ def is_duplicate_mcq(new_mcq: dict, existing_mcqs: list, similarity_threshold: f
         new_options_lower = [opt.strip().lower() for opt in new_options]
         existing_options_lower = [opt.strip().lower() for opt in existing_options]
         
-        # 3개 이상 보기가 동일하면 중복으로 간주
+        # 4개 모두 보기가 동일해야 중복으로 간주 (완화)
         matching_options = sum(1 for opt in new_options_lower if opt in existing_options_lower)
-        if matching_options >= 3:
+        if matching_options >= 4:
             return True
     
     return False
@@ -646,26 +729,92 @@ def handle_forge_mode(
         # 배치 생성: 같은 범위로 여러 개 생성
         batch_mcqs = []
         retry_limit = 10  # 중복 시 최대 재시도 횟수
+        rhythm_counter = {}  # 리듬 추적기 초기화
+        question_type_counter = {}  # 질문 형식 추적기 초기화
+        time_counter = {}  # 시간대 추적기 초기화
+        logic_counter = {}  # 논리(5H5T) 추적기 초기화
+        
+        # 다양성 추출 함수 임포트
+        from Utils.rhythm_tracker import (
+            extract_rhythm_from_mcq, 
+            should_reject_rhythm,
+            get_korean_rhythm_name
+        )
+        from Utils.diversity_tracker import (
+            extract_question_type,
+            extract_time_period
+        )
+        from Utils.logic_pool_tracker import (
+            extract_logic_from_mcq,
+            print_logic_distribution,
+            LOGIC_KOREAN_NAMES
+        )
         
         for i in range(num_questions):
             retry_count = 0
             while retry_count < retry_limit:
                 try:
                     print(f"[{i+1}/{num_questions}] 생성 중...")
+                    
+                    # State에 현재 카운터들 전달
                     mcq = forge_mode.generate_mcq(
                         topics_hierarchical=filtered_structure,
                         topics_nested=None,
                         user_topic=None,  # 랜덤
                         max_retries=6,
-                        category_weights=topic_category_weights
+                        category_weights=topic_category_weights,
+                        rhythm_counter=rhythm_counter,  # 리듬 카운터 전달
+                        question_type_counter=question_type_counter,  # 질문 형식 카운터 전달
+                        time_counter=time_counter,  # 시간대 카운터 전달
+                        logic_counter=logic_counter  # 논리 카운터 전달
                     )
                     
-                    # 중복 체크
+                    # 리듬 추출 및 검증
+                    rhythm = extract_rhythm_from_mcq(mcq)
+                    if rhythm:
+                        # 리듬이 2회 초과인지 체크
+                        if should_reject_rhythm(rhythm_counter, rhythm, max_count=2):
+                            retry_count += 1
+                            korean_name = get_korean_rhythm_name(rhythm)
+                            logger.warning(
+                                f"[{i+1}] 리듬 '{rhythm}({korean_name})' 이미 2회 사용됨, 재시도 중... "
+                                f"({retry_count}/{retry_limit})"
+                            )
+                            print(f"  🔄 [{i+1}] 리듬 중복 ({korean_name}), 재생성 중...")
+                            continue
+                    
+                    # 기존 중복 체크
                     if is_duplicate_mcq(mcq, batch_mcqs):
                         retry_count += 1
                         logger.warning(f"[{i+1}] 중복 문제 발견, 재시도 중... ({retry_count}/{retry_limit})")
                         print(f"  🔄 [{i+1}] 중복 문제 감지, 재생성 중...")
                         continue
+                    
+                    # 성공: 다양성 카운터 업데이트
+                    # 0. 논리 카운터 (5H5T 원인)
+                    logic = extract_logic_from_mcq(mcq)
+                    if logic:
+                        logic_counter[logic] = logic_counter.get(logic, 0) + 1
+                        korean_name = LOGIC_KOREAN_NAMES.get(logic, logic)
+                        logger.info(f"[{i+1}] 논리 '{korean_name}' 사용 (현재 {logic_counter[logic]}회)")
+                    
+                    # 1. 리듬 카운터
+                    if rhythm:
+                        rhythm_counter[rhythm] = rhythm_counter.get(rhythm, 0) + 1
+                        korean_name = get_korean_rhythm_name(rhythm)
+                        logger.info(f"[{i+1}] 리듬 '{rhythm}({korean_name})' 사용 (현재 {rhythm_counter[rhythm]}회)")
+                    
+                    # 2. 질문 형식 카운터
+                    qtype = extract_question_type(mcq)
+                    if qtype:
+                        question_type_counter[qtype] = question_type_counter.get(qtype, 0) + 1
+                        logger.info(f"[{i+1}] 질문 형식 '{qtype}' 사용 (현재 {question_type_counter[qtype]}개)")
+                    
+                    # 3. 시간대 카운터
+                    time_period = extract_time_period(mcq)
+                    if time_period:
+                        time_counter[time_period] = time_counter.get(time_period, 0) + 1
+                        logger.info(f"[{i+1}] 시간대 '{time_period}' 사용 (현재 {time_counter[time_period]}회)")
                     
                     batch_mcqs.append(mcq)
                     break  # 성공 시 루프 탈출
@@ -678,6 +827,36 @@ def handle_forge_mode(
             if retry_count >= retry_limit:
                 logger.error(f"[{i+1}] 최대 재시도 횟수 초과")
                 print(f"  ⚠️  [{i+1}] 중복 방지 실패 (10회 재시도)")
+        
+        # 배치 생성 완료 후 다양성 통계 출력
+        print(f"\n📊 다양성 통계:")
+        
+        # 1. 리듬 분포
+        if rhythm_counter:
+            print(f"\n  🔹 리듬 분포:")
+            for rhythm, count in sorted(rhythm_counter.items(), key=lambda x: -x[1]):
+                korean_name = get_korean_rhythm_name(rhythm)
+                print(f"     - {korean_name} ({rhythm}): {count}개")
+        
+        # 2. 질문 형식 분포
+        if question_type_counter:
+            print(f"\n  🔹 질문 형식 분포:")
+            for qtype, count in sorted(question_type_counter.items(), key=lambda x: -x[1]):
+                percentage = (count / num_questions * 100) if num_questions > 0 else 0
+                print(f"     - {qtype}: {count}개 ({percentage:.1f}%)")
+        
+        # 3. 시간대 분포
+        if time_counter:
+            print(f"\n  🔹 시간대 분포:")
+            for period, count in sorted(time_counter.items(), key=lambda x: -x[1]):
+                print(f"     - {period}: {count}회")
+        
+        # 4. 논리(5H5T) 분포
+        if logic_counter:
+            print(f"\n  🔹 논리(5H5T) 분포:")
+            for logic, count in sorted(logic_counter.items(), key=lambda x: -x[1]):
+                korean_name = LOGIC_KOREAN_NAMES.get(logic, logic)
+                print(f"     - {korean_name}: {count}회")
         
         # 결과 처리
         generated_mcqs.extend(batch_mcqs)

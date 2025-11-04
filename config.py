@@ -129,7 +129,7 @@ def get_retriever_config() -> Dict[str, Any]:
         "initial_k": int(os.getenv("RETRIEVAL_INITIAL_K", "20")),  # Reranking 전 초기 검색 개수
         "search_type": os.getenv("SEARCH_TYPE", "similarity"),
         "similarity_threshold": float(os.getenv("SIMILARITY_THRESHOLD", "0.7")),
-        "llm_temperature": float(os.getenv("LLM_TEMPERATURE", "0.7")),
+        "llm_temperature": float(os.getenv("LLM_TEMPERATURE", "0.9")),  # 창의성 향상을 위해 0.7 → 0.9
         "max_output_tokens": int(os.getenv("MAX_OUTPUT_TOKENS", "2048")),
         "stream_update": os.getenv("STREAM_UPDATE", "false").lower() == "true",
     }
@@ -336,7 +336,7 @@ def get_mcq_generation_config() -> Dict[str, Any]:
     """
     return {
         "random_sample_max": int(os.getenv("MCQ_RANDOM_SAMPLE_MAX", "1000")),
-        "few_shot_max_examples": int(os.getenv("MCQ_FEW_SHOT_MAX_EXAMPLES", "1")),  # 1개 예시 (명확한 형식 지시)
+        "few_shot_max_examples": int(os.getenv("MCQ_FEW_SHOT_MAX_EXAMPLES", "3")),  # 3개 예시 (다양성 증가)
         "few_shot_folder_path": os.getenv("MCQ_FEW_SHOT_FOLDER_PATH", "Data/Few_Shot"),
         "max_context_docs": int(os.getenv("MCQ_MAX_CONTEXT_DOCS", "7")),  # LLM에 전달할 최종 문서 개수
         

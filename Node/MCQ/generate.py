@@ -158,6 +158,46 @@ def create_mcq_generate_node(
                 selected_indices = []
                 updated_indices = recent_indices
             
+            # 논리(5H5T) 다양성 제약 추가 (배치 생성 시) - 가장 우선!
+            logic_counter = state.get("logic_counter", {})
+            if logic_counter:
+                from Utils.logic_pool_tracker import get_available_logic_prompt
+                used_logics = set(logic_counter.keys())
+                logic_constraint = get_available_logic_prompt(used_logics, max_show=5)
+                human_template = human_template + logic_constraint
+                logger.info(f"논리 제약 추가: {len(logic_counter)}가지 5H5T 원인 추적 중")
+            
+            # 리듬 다양성 제약 추가 (배치 생성 시)
+            rhythm_counter = state.get("rhythm_counter", {})
+            if rhythm_counter:
+                from Utils.rhythm_tracker import get_rhythm_status_text
+                rhythm_constraint = get_rhythm_status_text(rhythm_counter, max_count=2)
+                human_template = human_template + rhythm_constraint
+                logger.info(f"리듬 제약 추가: {len(rhythm_counter)}가지 리듬 추적 중")
+            
+            # 질문 형식 다양성 제약 추가 (배치 생성 시)
+            question_type_counter = state.get("question_type_counter", {})
+            if question_type_counter:
+                from Utils.diversity_tracker import get_question_type_constraint
+                qtype_constraint = get_question_type_constraint(
+                    question_type_counter,
+                    max_positive=5,
+                    max_negative=2,
+                    max_sequential=2,
+                    max_comparative=1,
+                    max_multiple=1
+                )
+                human_template = human_template + qtype_constraint
+                logger.info(f"질문 형식 제약 추가: {len(question_type_counter)}가지 형식 추적 중")
+            
+            # 시간대 다양성 제약 추가 (배치 생성 시)
+            time_counter = state.get("time_counter", {})
+            if time_counter:
+                from Utils.diversity_tracker import get_time_period_constraint
+                time_constraint = get_time_period_constraint(time_counter, max_per_period=3)
+                human_template = human_template + time_constraint
+                logger.info(f"시간대 제약 추가: {len(time_counter)}개 시간대 추적 중")
+            
             # format_instructions 강화
             base_format_instructions = parser.get_format_instructions()
             enhanced_format_instructions = (
