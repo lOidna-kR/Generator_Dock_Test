@@ -129,6 +129,11 @@ async def startup_event():
     """앱 시작 시 초기화"""
     global ask_mode, forge_mode, logger
     
+    # 콘솔 출력 강제 (flush=True)
+    print("\n" + "=" * 70, flush=True)
+    print("⚙️  컴포넌트 초기화 중...", flush=True)
+    print("=" * 70, flush=True)
+    
     logger = setup_logging("API")
     logger.info("=" * 70)
     logger.info("🚀 FastAPI 서버 시작")
@@ -136,24 +141,36 @@ async def startup_event():
     
     try:
         # 설정 검증
+        print("🔍 설정 검증 중...", flush=True)
         logger.info("🔍 설정 검증 중...")
         if not validate_config():
             raise RuntimeError("환경 변수 설정 오류. .env 파일을 확인하세요.")
+        print("✅ 설정 검증 완료", flush=True)
         logger.info("✅ 설정 검증 완료")
         
         # AskMode 초기화
+        print("⚙️  AskMode 초기화 중...", flush=True)
         logger.info("⚙️  AskMode 초기화 중...")
         ask_mode = AskMode(logger=logger)
+        print("✅ AskMode 초기화 완료", flush=True)
         logger.info("✅ AskMode 초기화 완료")
         
         # ForgeMode 초기화
+        print("⚙️  ForgeMode 초기화 중...", flush=True)
         logger.info("⚙️  ForgeMode 초기화 중...")
         forge_mode = ForgeMode(
             vector_store=ask_mode.vector_store,
             llm=ask_mode.llm,
             logger=logger,
         )
+        print("✅ ForgeMode 초기화 완료", flush=True)
         logger.info("✅ ForgeMode 초기화 완료")
+        
+        print("\n" + "=" * 70, flush=True)
+        print("✅ API 서버 준비 완료!", flush=True)
+        print("📍 API 문서: http://localhost:8000/docs", flush=True)
+        print("📍 프론트엔드와 연결 대기 중...", flush=True)
+        print("=" * 70 + "\n", flush=True)
         
         logger.info("=" * 70)
         logger.info("✅ API 서버 준비 완료!")
@@ -161,6 +178,7 @@ async def startup_event():
         logger.info("=" * 70)
         
     except Exception as e:
+        print(f"\n❌ 초기화 실패: {e}\n", flush=True)
         logger.error(f"❌ 초기화 실패: {e}", exc_info=True)
         raise
 
@@ -216,10 +234,12 @@ async def ask_endpoint(request: AskRequest):
         raise HTTPException(status_code=500, detail="AskMode가 초기화되지 않았습니다")
     
     try:
+        print(f"\n💬 [Ask] 질문: {request.content[:80]}...", flush=True)
         logger.info(f"[Ask] 질문: {request.content[:100]}...")
         
         # AskMode 실행
         result = ask_mode.process(request.content)
+        print(f"✅ [Ask] 답변 생성 완료\n", flush=True)
         
         # 응답 데이터 추출
         answer = result.get("answer", "")
@@ -307,6 +327,7 @@ async def forge_endpoint(request: ForgeRequest):
     topic = request.topic.strip()
     
     try:
+        print(f"\n🔨 [Forge] 요청 받음: {topic} {count}개", flush=True)
         logger.info(f"[Forge Batch] 주제: {topic}, 개수: {count}")
         
         # 교재 구조 가져오기
@@ -325,6 +346,7 @@ async def forge_endpoint(request: ForgeRequest):
         # MCQ 생성 (배치 또는 개별)
         if is_specific_chapter and count > 1:
             # 특정 Chapter + 여러 개: 개별 생성 (user_topic 지정 필요)
+            print(f"📋 [Forge] 특정 주제 모드: {topic} (다양성 추적)", flush=True)
             logger.info(f"[Forge Batch] 특정 주제 개별 생성 모드: {topic}")
             generated_mcqs = []
             
@@ -336,6 +358,7 @@ async def forge_endpoint(request: ForgeRequest):
             
             for i in range(count):
                 try:
+                    print(f"   [{i+1}/{count}] 생성 중...", flush=True)
                     logger.info(f"[Forge Batch] MCQ {i+1}/{count} 생성 중...")
                     
                     mcq = forge_mode.generate_mcq(
@@ -350,19 +373,23 @@ async def forge_endpoint(request: ForgeRequest):
                         logic_counter=logic_counter
                     )
                     generated_mcqs.append(mcq)
+                    print(f"   [{i+1}/{count}] ✓ 완료", flush=True)
                     logger.info(f"[Forge Batch] MCQ {i+1}/{count} 생성 완료")
                     
                 except Exception as e:
+                    print(f"   [{i+1}/{count}] ✗ 실패: {str(e)[:50]}", flush=True)
                     logger.error(f"[Forge Batch] MCQ {i+1}/{count} 생성 실패: {e}")
                     continue
         else:
             # 일반 주제 또는 단일 생성: 배치 메서드 활용 (더 효율적)
+            print(f"📋 [Forge] 배치 생성 모드 (중복 방지, 풀 관리)", flush=True)
             logger.info(f"[Forge Batch] 배치 생성 모드 (중복 방지, 풀 관리)")
             generated_mcqs = forge_mode.generate_mcq_batch(
                 topics_hierarchical=filtered_structure,
                 count=count,
                 max_retries=6
             )
+            print(f"   ✓ 배치 생성 완료: {len(generated_mcqs)}개", flush=True)
         
         if not generated_mcqs:
             raise ValueError("MCQ 생성에 실패했습니다")
@@ -385,6 +412,7 @@ async def forge_endpoint(request: ForgeRequest):
                 logger.warning(f"[Forge] MCQ 변환 실패: {e}")
                 continue
         
+        print(f"✅ [Forge] 완료: {len(mcqs)}개 생성 (요청: {count}개)\n", flush=True)
         logger.info(f"[Forge Batch] 완료: {len(mcqs)}개 생성 (요청: {count}개)")
         
         return ForgeResponse(
@@ -471,18 +499,34 @@ async def global_exception_handler(request, exc):
 
 if __name__ == "__main__":
     import uvicorn
+    import sys
     
-    print("=" * 70)
-    print("🚀 Generator Dock API Server")
-    print("=" * 70)
-    print("📍 API 문서: http://localhost:8000/docs")
-    print("📍 헬스 체크: http://localhost:8000/api/health")
-    print("=" * 70)
+    # 출력 버퍼 비활성화 (즉시 출력)
+    sys.stdout.reconfigure(line_buffering=True)
+    
+    print("\n" + "=" * 70, flush=True)
+    print("🚀 Generator Dock API Server", flush=True)
+    print("=" * 70, flush=True)
+    print("", flush=True)
+    print("📍 서버 시작 중...", flush=True)
+    print("📍 포트: 8000", flush=True)
+    print("📍 API 문서: http://localhost:8000/docs", flush=True)
+    print("📍 헬스 체크: http://localhost:8000/api/health", flush=True)
+    print("", flush=True)
+    print("⏱️  초기화 중 (약 20-30초 소요)...", flush=True)
+    print("   - Vertex AI 연결", flush=True)
+    print("   - Vector Store 초기화", flush=True)
+    print("   - LangGraph 워크플로우 빌드", flush=True)
+    print("", flush=True)
+    print("=" * 70, flush=True)
+    print("", flush=True)
     
     uvicorn.run(
         app, 
         host="0.0.0.0", 
         port=8000,
-        log_level="info"
+        reload=True,
+        log_level="info",
+        access_log=True
     )
 
