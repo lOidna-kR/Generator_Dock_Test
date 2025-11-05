@@ -522,7 +522,7 @@ if __name__ == "__main__":
     print("", flush=True)
     
     uvicorn.run(
-        app, 
+        "api:app",  # reload를 사용하려면 import string으로 전달
         host="0.0.0.0", 
         port=8000,
         reload=True,
